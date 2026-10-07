@@ -10,6 +10,10 @@ elle a été relue par transparence au dos de la page 3. L'énoncé de la Q30 re
 Les réponses ne viennent **pas** d'un corrigé officiel. Les 7 réponses incertaines
 (Q7, 30, 35, 36, 38, 39, 40) sont signalées par ⚠️ dans l'appli.
 
+## Exercice (SECU3a)
+L'exercice 2 (défaut d'isolement en TT) est en entier, guidé étape par étape avec indices et
+« à écrire sur ta copie ». L'exercice 1 est incomplet (page 1 du SECU3a non photographiée).
+
 ## Modes
 - **🎯 Révision ciblée** : le contrôle de l'an dernier tel quel
   - 📖 Apprendre dans l'ordre (Q1 → Q40, correction après chaque question)
@@ -17,6 +21,11 @@ Les réponses ne viennent **pas** d'un corrigé officiel. Les 7 réponses incert
   - 📝 En conditions réelles (40 questions, 30 min, +1 / 0)
 - 🎓 Apprentissage, ⏱️ Examen blanc, 🃏 Par cœur (mélangé), 🔁 Répétition espacée
 - Fiches mémo + antisèche question → réponse (réponses masquables) + photos du sujet
-- Plan 3 jours, stats, points faibles, XP, badges
+- Accueil guidé : bouton ▶ Continuer, carte des 40 questions (maîtrise), objectif et compte à rebours
+- Apprendre pas à pas : 4 blocs, astuce mnémotechnique pour chaque question
+- 🚀 Aller plus loin : 50 questions bonus du même style (hors contrôle, jamais mélangées aux 40)
+- Planning daté jusqu'au vendredi 16 octobre 2026 (léger en semaine, à fond le week-end, veille légère)
+- Stats, points faibles, XP, badges
 
 HTML/CSS/JS purs, progression dans le `localStorage`.
+Deux copies identiques à `js/owner.js` près (prénom + couleurs) : `secu-qcm` (Julian) et `secu-qcm-nathan`.

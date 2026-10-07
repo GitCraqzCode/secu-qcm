@@ -5,7 +5,8 @@
 
 /* ── Identifiants stables ──────────────────────────────── */
 (function(){ const n={}; QUESTIONS.forEach(q=>{ n[q.c]=(n[q.c]||0); q.id=q.c+'-'+n[q.c]++; }); })();
-const QBY = {}; QUESTIONS.forEach(q=>QBY[q.id]=q);
+BONUS.forEach((q,i)=>{ q.id='x-'+i; q.bonus=true; });
+const QBY = {}; QUESTIONS.concat(BONUS).forEach(q=>QBY[q.id]=q);
 const CH = {}; CHAPTERS.forEach(c=>CH[c.id]=c);
 
 /* ── Constantes de jeu ─────────────────────────────────── */
@@ -34,10 +35,20 @@ const BADGES = [
 
 /* ── État persistant ───────────────────────────────────── */
 let S = load();
-function blank(){ return {xp:0, q:{}, badges:[], sessions:[], revCount:0, day:{last:null,streak:0}, snd:true, theme:'dark', plan:{}, flash:0, hideAns:false}; }
+function blank(){ return {xp:0, q:{}, badges:[], sessions:[], revCount:0, day:{last:null,streak:0}, snd:true, theme:'dark', plan:{}, flash:0, hideAns:false, exo:{}, goal:{set:false,date:'2026-10-16',target:32}, mast:{d:'',n:0}}; }
 function load(){ try{ const o=JSON.parse(localStorage.getItem(KEY)); return o&&o.q? Object.assign(blank(),o) : blank(); }catch(e){ return blank(); } }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 function qs(id){ return S.q[id] || (S.q[id]={seen:0,ok:0,ko:0,box:0,due:0,lastKo:false}); }
+
+/* ── Maîtrise d'une question ─────────────────────────────
+   -1 pas vue · 0 ratée · 1 juste une fois · 2 maîtrisée · 3 béton */
+function lvl(q){ const r=S.q[q.id]; if(!r||!r.seen) return -1; if(r.lastKo) return 0; return Math.min(3,r.box); }
+const isMast = q => lvl(q)>=2;
+function mastCount(list){ return (list||QUESTIONS).filter(isMast).length; }
+function blocQs(b){ return QUESTIONS.filter(q=>q.n>=b.from && q.n<=b.to); }
+function blocDone(b){ const l=blocQs(b); return mastCount(l) >= Math.ceil(l.length*0.8); }
+function daysLeft(){ if(!S.goal.date) return null; const d=Math.ceil((new Date(S.goal.date+'T12:00')-new Date(today()+'T12:00'))/864e5); return d; }
+function todayMast(){ return S.mast.d===today()? S.mast.n : 0; }
 
 /* ── Niveaux ───────────────────────────────────────────── */
 const xpFor = L => 40*L*(L+1);                 // XP cumulé requis pour atteindre le niveau L+1
@@ -167,40 +178,141 @@ function dueQuestions(){
   return QUESTIONS.filter(q=>{ const r=S.q[q.id]; return r && r.seen && r.due<=now; });
 }
 function renderHome(){
-  const all=Object.values(S.q);
-  const seen=all.filter(r=>r.seen).length;
-  const ok=all.reduce((s,r)=>s+r.ok,0), tot=all.reduce((s,r)=>s+r.ok+r.ko,0);
-  $('#totQ').textContent=QUESTIONS.length;
-  $('#kSeen').textContent=seen+'/'+QUESTIONS.length;
-  $('#kAcc').textContent= tot? pct(ok,tot)+'%' : '—';
-  $('#kXp').textContent=S.xp;
-  $('#kBadge').textContent=S.badges.length+'/'+BADGES.length;
-  const best=S.sessions.filter(x=>x.ctrl && x.total===QUESTIONS.length).reduce((m,x)=>Math.max(m,x.good),-1);
-  $('#ctrlTag').textContent = best<0? 'Jamais fait → vise 40/40' : 'Meilleur score : '+best+' / '+QUESTIONS.length;
+  const M=mastCount(), N=QUESTIONS.length, C=2*Math.PI*52, p=M/N;
+  const tgt=S.goal.target||32;
+  $('#mRing').innerHTML=`<svg viewBox="0 0 120 120"><circle class="bgc" cx="60" cy="60" r="52"></circle>
+     <circle cx="60" cy="60" r="52" stroke="url(#gr)" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-p)}"></circle>
+     <circle cx="60" cy="60" r="52" class="tgt" stroke-dasharray="2 ${C}" stroke-dashoffset="${-C*tgt/N}"></circle>
+     <defs><linearGradient id="gr" x1="0" x2="1"><stop offset="0" stop-color="var(--acc)"/><stop offset="1" stop-color="var(--acc2)"/></linearGradient></defs></svg>
+     <div><b>${M}</b><small>/ ${N} maîtrisées</small></div>`;
+  const dl=daysLeft();
+  $('#countdown').innerHTML = dl===null? '📅 Date du contrôle ?' : dl>1? `📅 Contrôle dans <b>${dl} jours</b>` : dl===1? '📅 Contrôle <b>demain</b> !' : dl===0? '📅 Contrôle <b>aujourd’hui</b> 💪' : '📅 Contrôle passé';
+  const left=Math.max(0,tgt-M), tm=todayMast();
+  let per = left+tm;
+  if(dl && dl>0) per=Math.ceil((left+tm)/dl);
+  $('#goalTxt').innerHTML = M>=tgt? `🎉 Objectif <b>${tgt}/40</b> atteint ! Vise plus haut ou attaque les bonus.`
+     : `Objectif <b>${tgt}/40</b> · encore <b>${left}</b> question${left>1?'s':''} à maîtriser`;
+  const daily=Math.max(1,Math.min(per, N));
+  $('#todayTxt').textContent = M>=tgt? tm+' maîtrisée'+(tm>1?'s':'') : tm+' / '+daily+' maîtrisées';
+  $('#todayFill').style.width = (M>=tgt?100:Math.min(100,pct(tm,daily)))+'%';
+  const nx=nextAction(); $('#btnNext').innerHTML='▶ '+nx.l; $('#nextWhy').innerHTML=nx.why;
+
+  // carte des 40
+  const mp=$('#qmap'); mp.innerHTML='';
+  QUESTIONS.forEach(q=>{ const b=el('button','qc l'+lvl(q), String(q.n)); b.title='Q'+q.n+(q.doute?' (réponse à vérifier)':'');
+    if(q.doute) b.classList.add('dq2');
+    b.onclick=()=>{ sndClick(); startSession('learn',[q.c],1,{pool:[q]}); }; mp.appendChild(b); });
+
+  // blocs
+  const bl=$('#blocList'); bl.innerHTML='';
+  BLOCS.forEach((b,k)=>{
+    const l=blocQs(b), m=mastCount(l), done=blocDone(b), seen=l.filter(q=>lvl(q)>=0).length;
+    const d=el('div','bloc'+(done?' done':''));
+    d.innerHTML=`<div class="bh"><span class="em">${done?'✅':b.ic}</span><span><b>${b.t} · Q${b.from} à Q${b.to}</b><small>${b.sub}</small></span></div>
+      <div class="bbar"><i style="width:${pct(m,l.length)}%"></i></div>
+      <div class="bst">${m}/${l.length} maîtrisées${seen<l.length?' · '+(l.length-seen)+' jamais vues':''}</div>
+      <div class="bbtn"><button class="btn ghost sm" data-a="learn">📖 Apprendre</button><button class="btn ghost sm" data-a="flash">🃏 Cartes</button></div>`;
+    d.querySelector('[data-a=learn]').onclick=()=>{ sndClick(); startBloc(b); };
+    d.querySelector('[data-a=flash]').onclick=()=>{ sndClick(); startFlash(null,true,blocQs(b)); };
+    bl.appendChild(d);
+  });
+
+  // exercices
+  const xl=$('#exoList'); xl.innerHTML='';
+  EXOS.forEach(x=>{
+    const r=S.exo[x.id]||{best:-1}, n=x.steps.length;
+    const d=el('div','bloc'+(r.best===n?' done':''));
+    d.innerHTML=`<div class="bh"><span class="em">${r.best===n?'✅':x.ic}</span><span><b>${esc(x.t)}</b><small>${esc(x.sub)}</small></span></div>
+      <div class="bbar"><i style="width:${pct(Math.max(0,r.best),n)}%"></i></div>
+      <div class="bst">${r.best<0?'Pas encore fait':'Meilleur : '+r.best+' / '+n+' étapes justes du 1<sup>er</sup> coup'}</div>
+      <div class="bbtn"><button class="btn ${x.partial?'ghost ':''}sm">${r.best<0?'▶ Commencer':'🔁 Refaire'}</button></div>`;
+    d.querySelector('button').onclick=()=>{ sndClick(); startExo(x.id); };
+    xl.appendChild(d);
+  });
+
+  // bonus
+  $('#bonusN').textContent=BONUS.length;
+  const bc=$('#bonusChaps'); bc.innerHTML='';
+  CHAPTERS.forEach(c=>{ const n=BONUS.filter(q=>q.c===c.id).length;
+    const b=el('button','chip',`${c.ic} ${esc(c.short)} (${n})`);
+    b.onclick=()=>{ sndClick(); startSession('learn',[c.id],n,{pool:BONUS.filter(q=>q.c===c.id)}); };
+    bc.appendChild(b); });
+
+  // contrôle blanc : meilleur score
+  const best=S.sessions.filter(x=>x.ctrl && x.total===N).reduce((m,x)=>Math.max(m,x.good),-1);
+  $('#ctrlTag').textContent = best<0? '30 min comme le jour J' : 'Meilleur : '+best+' / '+N;
+
   const d=dueQuestions().length;
   $('#dueTag').textContent = d? (d+' question'+(d>1?'s':'')+' à revoir →') : 'Rien à réviser pour l’instant';
 
   const cl=$('#chapList'); cl.innerHTML='';
   CHAPTERS.forEach(c=>{
-    const st=chapStats(c.id), p=pct(st.seen,st.n), C=2*Math.PI*19;
+    const st=chapStats(c.id), pp=pct(st.seen,st.n), CC=2*Math.PI*19;
     const b=el('button','chap');
     b.innerHTML=`<div class="ring">
         <svg viewBox="0 0 46 46"><circle class="bgc" cx="23" cy="23" r="19"></circle>
-        <circle cx="23" cy="23" r="19" stroke="${c.col}" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-p/100)}"></circle></svg>
+        <circle cx="23" cy="23" r="19" stroke="${c.col}" stroke-dasharray="${CC}" stroke-dashoffset="${CC*(1-pp/100)}"></circle></svg>
         <em>${c.ic}</em></div>
       <div class="txt"><b>${c.n}. ${esc(c.t)}</b><small>${st.n} questions · ${st.seen} vues${st.tot?' · '+st.acc+'% de réussite':''}</small></div>
-      <div class="pc" style="color:${c.col}">${p}%</div>`;
+      <div class="pc" style="color:${c.col}">${pp}%</div>`;
     b.onclick=()=>{ sndClick(); openSetup('learn',[c.id]); };
     cl.appendChild(b);
   });
 
-  const bl=$('#badgeList'); bl.innerHTML='';
+  $('#kBadge').textContent=S.badges.length+' / '+BADGES.length;
+  const bdl=$('#badgeList'); bdl.innerHTML='';
   BADGES.forEach(b=>{
     const got=S.badges.includes(b.id);
-    bl.appendChild(el('div','badge'+(got?' got':''),
+    bdl.appendChild(el('div','badge'+(got?' got':''),
       `<span class="em">${b.em}</span><b>${esc(b.t)}</b><small>${esc(b.d)}</small>`));
   });
 }
+
+/* ── Que faire maintenant ? ────────────────────────────── */
+function startBloc(b){
+  const l=blocQs(b), fresh=l.every(q=>lvl(q)<0);
+  startSession('learn', CHAPTERS.map(c=>c.id), l.length, {pool: fresh? l : shuffle(l), fixed:fresh});
+}
+function nextAction(){
+  const pd=planCurrent();
+  if(pd){ const st=pd.steps.find(x=>!planDone(x.id) && x.act.k!=='none');
+    if(st) return {l:st.l.replace(/<[^>]+>/g,''), why:`📅 Planning ${pd.d===today()?'d’aujourd’hui':'du '+dayLabel(pd.d)} · étape ${pd.steps.indexOf(st)+1}/${pd.steps.filter(x=>x.act.k!=='none').length} · ${st.m} min`, go:()=>runStep(st)};
+  }
+  for(const b of BLOCS){
+    if(blocDone(b)) continue;
+    const l=blocQs(b), un=l.filter(q=>lvl(q)<0), ko=l.filter(q=>lvl(q)===0);
+    if(un.length) return {l:`Apprendre le ${b.t.toLowerCase()} (Q${b.from} à Q${b.to})`, why:`${b.sub} · ${un.length} question${un.length>1?'s':''} jamais vue${un.length>1?'s':''}. Lis bien l’astuce après chaque réponse.`,
+      go:()=>startBloc(b)};
+    if(ko.length) return {l:`Corriger tes ${ko.length} erreur${ko.length>1?'s':''} du ${b.t.toLowerCase()}`, why:'Les questions ratées, tout de suite, tant que c’est frais.',
+      go:()=>startSession('learn',CHAPTERS.map(c=>c.id),ko.length,{pool:shuffle(ko)})};
+    return {l:`Cartes du ${b.t.toLowerCase()} (Q${b.from} à Q${b.to})`, why:`Encore ${Math.ceil(l.length*0.8)-mastCount(l)} à maîtriser pour valider le bloc : il faut avoir juste 2 fois.`,
+      go:()=>startFlash(null,false,l)};
+  }
+  const due=poolReview();
+  if(due.length) return {l:`Répétition espacée (${Math.min(20,due.length)} questions)`, why:'Les 4 blocs sont validés 🎉 On revoit ce qui commence à s’oublier.',
+    go:()=>startSession('review',CHAPTERS.map(c=>c.id),Math.min(20,due.length),{pool:due})};
+  const best=S.sessions.filter(x=>x.ctrl && x.total===QUESTIONS.length).reduce((m,x)=>Math.max(m,x.good),-1);
+  if(best<(S.goal.target||32)) return {l:'Contrôle blanc en conditions réelles', why:'Les 40 questions en 30 min, comme le jour J. Vise '+(S.goal.target||32)+'/40.',
+    go:()=>startControle()};
+  return {l:'Aller plus loin : contrôle inédit', why:'Objectif atteint au contrôle blanc 💪 Entraîne-toi sur des questions nouvelles du même style.',
+    go:()=>startBonusExam()};
+}
+
+/* ── Objectif ──────────────────────────────────────────── */
+function openGoal(){
+  $('#onbHi').textContent='Salut '+(typeof OWNER==='string'? OWNER:'')+' !';
+  $('#onbDate').value=S.goal.date||EXAM_DATE;
+  const tc=$('#onbTarget'); tc.innerHTML='';
+  [[20,'20/40 · la moyenne'],[28,'28/40 · 14/20'],[32,'32/40 · 16/20'],[36,'36/40 · 18/20'],[40,'40/40 · parfait']].forEach(([v,l])=>{
+    const b=el('button','chip'+(S.goal.target===v?' on':''),l);
+    b.onclick=()=>{ S.goal.target=v; tc.querySelectorAll('.chip').forEach(x=>x.classList.remove('on')); b.classList.add('on'); sndClick(); };
+    tc.appendChild(b); });
+  $('#onb').classList.add('on');
+}
+$('#onbGo').onclick=()=>{ S.goal.date=$('#onbDate').value; S.goal.set=true; save(); $('#onb').classList.remove('on'); renderHome(); sndOk(); };
+$('#onbLater').onclick=()=>{ S.goal.set=true; save(); $('#onb').classList.remove('on'); renderHome(); };
+$('#goalEdit').onclick=()=>{ sndClick(); openGoal(); };
+$('#btnNext').onclick=()=>{ sndClick(); nextAction().go(); };
 
 /* ── Écran de configuration ────────────────────────────── */
 let cfg = {mode:'exam', chaps:[], count:20, timer:true, diff:0, malus:1/3};
@@ -297,7 +409,7 @@ function startSession(mode, chaps, count, opts={}){
   if(!pool.length){ toast('Aucune question disponible.'); cfg=old; return; }
   if(mode!=='review' && !opts.fixed) pool=shuffle(pool);
   pool=pool.slice(0, Math.min(cfg.count, pool.length));
-  SES={mode, list:pool, i:0, answers:[], combo:0, maxCombo:0, xp:0, step:opts.step||null, fixed:!!opts.fixed, ctrl:!!opts.ctrl,
+  SES={mode, list:pool, i:0, answers:[], combo:0, maxCombo:0, xp:0, step:opts.step||null, fixed:!!opts.fixed, ctrl:!!opts.ctrl, rush:!!opts.rush,
        t0:Date.now(), limit: cfg.timer? (opts.limit||pool.length*45) : 0, tick:null};
   touchDay();
   if(SES.limit){ $('#qTimer').style.display=''; startTimer(); } else $('#qTimer').style.display='none';
@@ -326,7 +438,7 @@ function renderQ(){
 
   card.appendChild(el('div','qmeta',
     `<span class="pill" style="color:${ch.col}">${ch.ic} ${ch.n}. ${esc(ch.short)}</span>
-     <span class="pill">Q${q.n} · page ${q.p}</span>
+     <span class="pill${q.bonus?' bonus':''}">${qTag(q)}</span>
      <span class="pill d${q.d}">${'⭐'.repeat(q.d)}</span>
      <span class="pill">${({qcm:'Choix unique',multi:'Choix multiples',vf:'Vrai / Faux',match:'Associations',order:'Remise en ordre',label:'Placer les mots'})[q.t]}</span>`));
   card.appendChild(el('div','qtext', q.q));
@@ -524,10 +636,11 @@ function validate(skipped){
   const q=CUR.q, good = skipped? false : isCorrect();
   CUR.answered=true;
 
-  const r=qs(q.id); r.seen++;
+  const r=qs(q.id); const wasM=!q.bonus && isMast(q); r.seen++;
   if(good){ r.ok++; r.lastKo=false; r.box=Math.min(r.box+1,BOXES.length-1); }
   else    { r.ko++; r.lastKo=true;  r.box=0; }
   r.due=Date.now()+BOXES[r.box];
+  bumpMast(q, wasM);
   if(SES.mode==='review') S.revCount++;
 
   if(good){ SES.combo++; SES.maxCombo=Math.max(SES.maxCombo,SES.combo); }
@@ -591,7 +704,7 @@ function validate(skipped){
   {
     const fb=el('div','fb '+(good?'ok':'ko'),
       `<div class="hd2">${good?'✅ Bonne réponse'+(gain?' <span style="opacity:.8;font-size:.8rem">+'+gain+' XP</span>':''):'❌ Raté'}</div>
-       <div class="exp">${q.e}</div>`);
+       <div class="exp">${q.e}</div>${astuceHTML(q)}`);
     card.insertBefore(fb, btn.parentNode);
   }
   btn.style.display=''; btn.disabled=false;
@@ -599,6 +712,13 @@ function validate(skipped){
   btn.onclick=nextQ;
   btn.focus();
   save();
+}
+function bumpMast(q, wasM){
+  if(q.bonus) return;
+  const now=isMast(q);
+  if(S.mast.d!==today()) S.mast={d:today(), n:0};
+  if(now && !wasM){ S.mast.n++; if(!SES || SES.mode!=='exam') toast('🧠 Q'+q.n+' maîtrisée ! '+mastCount()+' / '+QUESTIONS.length); }
+  else if(!now && wasM) S.mast.n=Math.max(0,S.mast.n-1);
 }
 function showCombo(n){
   const c=$('#combo');
@@ -623,6 +743,7 @@ function finish(){
   const note=den? Math.max(0,(good-faux*malus)/den*20):0;
   S.sessions.unshift({d:Date.now(), mode:SES.mode, good, total:done, chaps:cfg.chaps.slice(), note:+note.toFixed(1)});
   if(SES.step){ S.plan[SES.step]=true; }
+  if(SES.rush) S.rush=Math.max(S.rush||0, good);
   S.sessions=S.sessions.slice(0,40); save();
   const ctx={combo:SES.maxCombo, examNote: SES.mode==='exam'? note:0, examPerfect: SES.mode==='exam'&&done>=10&&good===done};
   if(SES.ctrl && done===QUESTIONS.length) ctx.ctrl=good;
@@ -639,7 +760,8 @@ function finish(){
       <circle cx="80" cy="80" r="70" stroke="${col}" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-p/100)}" style="transition:stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1)"></circle></svg>
       <div><div class="val" style="color:${col}">${p}%</div><div class="sub">${good} / ${done}</div></div>
     </div>
-    <div class="note">${verdicts[0]} ${SES.ctrl? `Score : ${good} / ${QUESTIONS.length} · `:''}Note : ${note.toFixed(1)} / 20</div>
+    ${SES.rush? `<div class="note">⚡ ${good} bonne${good>1?'s':''} réponse${good>1?'s':''} en 5 min</div><div class="verdict" style="font-size:.84rem">Record : ${Math.max(good,S.rush||0)} · ${done} répondues</div>`:''}
+    <div class="note"${SES.rush?' style="display:none"':''}>${verdicts[0]} ${SES.ctrl? `Score : ${good} / ${QUESTIONS.length} · `:''}Note : ${note.toFixed(1)} / 20</div>
     ${SES.ctrl && done<QUESTIONS.length? `<div class="verdict" style="font-size:.84rem">⏰ ${QUESTIONS.length-done} question${QUESTIONS.length-done>1?'s':''} sans réponse (temps écoulé) = 0 point</div>`:''}
     ${malus? `<div class="verdict" style="font-size:.84rem">${good} bonne${good>1?'s':''} · ${faux} fausse${faux>1?'s':''} · ${skipped} abstention${skipped>1?'s':''}
        — barème −${malus===0.5?'½':'⅓'} par erreur${Math.abs(brut-note)>0.05?` (sans pénalité : ${brut.toFixed(1)}/20)`:''}</div>`:''}
@@ -652,8 +774,8 @@ function finish(){
     const q=QBY[a.id];
     const d=el('div','rev'+(a.good?'':' open'));
     d.innerHTML=`<div class="rh"><span class="ic">${a.good?'✅':(a.skipped?'⊘':'❌')}</span>
-        <span><b>Q${q.n}.</b> ${q.q}</span></div>
-      <div class="rb">${goodAnswerHTML(q)}${q.doute?'<div class="doute">⚠️ Réponse non garantie : à vérifier avec le cours</div>':''}<div style="margin-top:9px">${q.e}</div></div>`;
+        <span><b>${q.bonus?'Bonus':'Q'+q.n}.</b> ${q.q}</span></div>
+      <div class="rb">${goodAnswerHTML(q)}${q.doute?'<div class="doute">⚠️ Réponse non garantie : à vérifier avec le cours</div>':''}<div style="margin-top:9px">${q.e}</div>${astuceHTML(q)}</div>`;
     d.querySelector('.rh').onclick=()=>d.classList.toggle('open');
     rl.appendChild(d);
   });
@@ -674,6 +796,8 @@ function goodAnswerHTML(q){
 }
 
 /* ── Fiches : mémo + antisèche + sujet original ────────── */
+function astuceHTML(q){ const a=!q.bonus && ASTUCES[q.n]; return a? `<div class="astuce">💡 <b>Astuce :</b> ${a}</div>` : ''; }
+function qTag(q){ return q.bonus? 'Bonus · même style' : 'Q'+q.n+' · page '+q.p; }
 function answerText(q){
   if(q.t==='order') return q.s.map((x,i)=>(i+1)+'. '+x).join(' → ');
   return q.o[q.a];
@@ -721,10 +845,10 @@ function renderCourse(){
       <small style="font-weight:400;color:var(--txt3);font-size:.74rem">Les photos du 15/10/2025 · touche une page pour l’agrandir</small></span>
       <span class="ar">›</span></button><div class="ab"></div>`;
   const body=a.querySelector('.ab');
-  body.appendChild(el('p','tip','La <b>page 4</b> (Q29 à Q36) n’a pas été photographiée. On la lit <b>par transparence, à l’envers</b>, au dos de la page 3 (image retournée et contrastée). L’énoncé de la <b>Q30</b> est caché par le texte de la page 3.'));
+  body.appendChild(el('p','tip','La <b>page 4</b> (Q29 à Q36) n’a pas été photographiée. On la lit <b>par transparence, à l’envers</b>, au dos de la page 3 (image retournée et contrastée). L’énoncé de la <b>Q30</b> est caché par le texte de la page 3. Pour les exercices (SECU3a), seule la page 2 a été photographiée.'));
   const g=el('div','pages');
   [['sujet-p1.jpg','Page 1 · Q1–8'],['sujet-p2.jpg','Page 2 · Q9–19'],['sujet-p3.jpg','Page 3 · Q20–28'],
-   ['sujet-p4-transparence.jpg','Page 4 · Q29–36 (transparence)'],['sujet-p5.jpg','Page 5 · Q37–40']].forEach(([f,l])=>{
+   ['sujet-p4-transparence.jpg','Page 4 · Q29–36 (transparence)'],['sujet-p5.jpg','Page 5 · Q37–40'],['sujet-exo-p2.jpg','SECU3a · exercices (page 2)']].forEach(([f,l])=>{
     const d=el('button','pg',`<img src="assets/img/${f}" alt="${l}" loading="lazy"><small>${l}</small>`);
     d.onclick=()=>openLB('assets/img/'+f); g.appendChild(d);
   });
@@ -735,8 +859,8 @@ function renderCourse(){
 
 /* ── Mode « Par cœur » (cartes) ────────────────────────── */
 let FL=null;
-function startFlash(chaps, ordered){
-  let list=QUESTIONS.filter(q=>(chaps||CHAPTERS.map(c=>c.id)).includes(q.c));
+function startFlash(chaps, ordered, pool){
+  let list=pool? pool.slice() : QUESTIONS.filter(q=>(chaps||CHAPTERS.map(c=>c.id)).includes(q.c));
   if(!ordered) list=shuffle(list);
   FL={list, i:0, know:0, dont:[]};
   touchDay(); show('flash'); renderFlash();
@@ -746,14 +870,15 @@ function renderFlash(){
   $('#flFill').style.width=(FL.i/FL.list.length*100)+'%';
   $('#flCount').textContent=(FL.i+1)+'/'+FL.list.length;
   card.className='card flash';
-  card.innerHTML=`<div class="qmeta"><span class="pill" style="color:${ch.col}">${ch.ic} ${esc(ch.short)}</span><span class="pill">Q${q.n} · page ${q.p}</span></div>
+  card.innerHTML=`<div class="qmeta"><span class="pill" style="color:${ch.col}">${ch.ic} ${esc(ch.short)}</span><span class="pill${q.bonus?' bonus':''}">${qTag(q)}</span></div>
     <div class="qtext">${q.q}</div>
     ${q.i?`<div class="qimg sym"><img src="assets/img/${q.i}" alt=""></div>`:''}
     <ul class="flopts">${(q.t==='order'? q.init.map(k=>q.s[k]) : q.o).map(o=>'<li>'+o+'</li>').join('')}</ul>
+    <div class="flhint">Réponds dans ta tête, puis retourne la carte.</div>
     <div class="flback">
       <div class="flans">➜ ${answerText(q)}</div>
       ${q.doute?'<div class="doute">⚠️ Réponse non garantie : à vérifier avec le cours</div>':''}
-      <div class="exp">${q.e}</div>
+      <div class="exp">${q.e}</div>${astuceHTML(q)}
     </div>
     <div class="btnrow flreveal"><button class="btn full" id="flShow">👀 Voir la réponse</button></div>
     <div class="btnrow fljudge"><button class="btn ghost" id="flKo">✗ Je ne savais pas</button><button class="btn" id="flOk">✓ Je savais</button></div>`;
@@ -764,11 +889,11 @@ function renderFlash(){
 function flReveal(){ const c=$('#flCard'); if(c.classList.contains('rev')) return; c.classList.add('rev'); sndClick();
   S.flash=(S.flash||0)+1; save(); checkBadges(); }
 function flJudge(ok){
-  const q=FL.list[FL.i], r=qs(q.id);
+  const q=FL.list[FL.i], r=qs(q.id), wasM=!q.bonus && isMast(q);
   r.seen++;
   if(ok){ r.ok++; r.lastKo=false; r.box=Math.min(r.box+1,BOXES.length-1); FL.know++; addXP(4); sndOk(); }
   else  { r.ko++; r.lastKo=true;  r.box=0; FL.dont.push(q); sndKo(); }
-  r.due=Date.now()+BOXES[r.box]; save();
+  r.due=Date.now()+BOXES[r.box]; bumpMast(q, wasM); save();
   FL.i++;
   if(FL.i<FL.list.length) return renderFlash();
   const card=$('#flCard'); card.className='card score';
@@ -783,97 +908,224 @@ function flJudge(ok){
   renderHome(); renderStats();
 }
 
-/* ── Le vrai contrôle : 40 questions dans l’ordre, 30 min, +1/0 ── */
-function startControle(step){
-  startSession('exam', CHAPTERS.map(c=>c.id), QUESTIONS.length,
-    {pool:QUESTIONS.slice(), fixed:true, ctrl:true, timer:true, limit:30*60, malus:0, step});
+/* ── Exercice guidé ────────────────────────────────────── */
+let EX=null;
+const EQSVG=`<svg class="eqsvg" viewBox="0 0 320 150" role="img" aria-label="Schéma équivalent : V, Rd, RA et RB en série">
+ <g fill="none" stroke="currentColor" stroke-width="2.2"><path d="M30 40 V110"/><circle cx="30" cy="75" r="16"/>
+ <path d="M30 40 H80"/><rect x="80" y="30" width="50" height="20"/><path d="M130 40 H290 V60"/><rect x="280" y="60" width="20" height="50"/>
+ <path d="M290 110 V125 H190"/><rect x="140" y="115" width="50" height="20"/><path d="M140 125 H30 V110"/></g>
+ <g fill="currentColor" font-size="13" font-family="inherit"><text x="22" y="80">V</text><text x="92" y="24">R<tspan font-size="9" dy="3">d</tspan></text>
+ <text x="304" y="90">R<tspan font-size="9" dy="3">A</tspan></text><text x="152" y="108">R<tspan font-size="9" dy="3">B</tspan></text>
+ <text x="40" y="34" font-size="11">phase</text><text x="200" y="34" font-size="11">masse</text><text x="200" y="145" font-size="11">terre → neutre</text>
+ <text x="250" y="100" font-size="12">U<tspan font-size="8" dy="3">c</tspan></text></g>
+ <path d="M155 34 l10 6 -10 6" fill="none" stroke="var(--acc)" stroke-width="2"/><text x="148" y="60" font-size="11" fill="var(--acc)">I<tspan font-size="8" dy="3">d</tspan></text></svg>`;
+function startExo(id){
+  const x=EXOS.find(e=>e.id===id);
+  EX={x, i:0, first:0, tries:0};
+  touchDay(); show('exo');
+  $('#exHead').innerHTML=`<div class="qmeta"><span class="pill">🧮 SECU3a</span><span class="pill">${x.partial?'⚠️ énoncé incomplet':'énoncé complet'}</span></div>
+    <h2 class="exh">${esc(x.t)}</h2>
+    <details class="exen" ${x.partial?'open':''}><summary>📄 Lire l’énoncé${x.img?' et le schéma':''}</summary>${x.enonce}
+    ${x.img?`<div class="qimg exim"><img src="assets/img/${x.img}" alt="Schéma de l’exercice"></div>`:''}</details>
+    ${x.img?`<div class="qimg exim small"><img src="assets/img/${x.img}" alt="Schéma de l’exercice"></div>`:''}
+    ${x.data?`<div class="exdata">📌 ${x.data}</div>`:''}`;
+  $$('#exHead .qimg').forEach(w=>w.onclick=()=>openLB('assets/img/'+x.img));
+  $('#exSteps').innerHTML=''; renderExStep();
+}
+function renderExStep(){
+  const x=EX.x, st=x.steps[EX.i], n=x.steps.length;
+  $('#exFill').style.width=(EX.i/n*100)+'%'; $('#exCount').textContent=(EX.i+1)+'/'+n;
+  EX.tries=0;
+  const c=el('div','card exstep');
+  c.innerHTML=`<div class="qtext">${st.q}</div>${st.table?TABLE41A:''}
+    ${st.t==='num'? `<div class="numrow"><input type="text" inputmode="decimal" class="numin" placeholder="ta réponse"><span class="unit">${st.u}</span></div>`
+      : `<div class="opts">${st.o.map((o,k)=>`<button class="opt" data-k="${k}"><span class="k">${k+1}</span><span>${o}</span></button>`).join('')}</div>`}
+    <div class="exfb"></div>
+    <div class="btnrow"><button class="btn ghost exhint">💡 Indice</button><button class="btn exok"${st.t==='num'?'':' style="display:none"'}>Vérifier</button></div>`;
+  $('#exSteps').appendChild(c);
+  const fb=c.querySelector('.exfb');
+  c.querySelector('.exhint').onclick=()=>{ sndClick(); EX.tries=Math.max(EX.tries,1); fb.innerHTML=`<div class="astuce">💡 ${st.h}</div>`; };
+  const done=(ok)=>{
+    if(c.dataset.done) return;
+    if(!ok && EX.tries<1){ EX.tries++; sndKo(); fb.innerHTML=`<div class="fb ko"><div class="hd2">❌ Pas encore, réessaie</div><div class="exp">💡 ${st.h}</div></div>`;
+      c.querySelectorAll('.opt.wrong').forEach(b=>b.disabled=true); return; }
+    c.dataset.done=1; if(ok && EX.tries===0) EX.first++;
+    ok? sndOk() : sndKo(); if(ok) addXP(EX.tries===0?12:6);
+    c.querySelectorAll('.opt').forEach(b=>{ b.disabled=true; if(+b.dataset.k===st.a) b.classList.add('good'); });
+    const inp=c.querySelector('.numin'); if(inp) inp.disabled=true;
+    fb.innerHTML=`<div class="fb ${ok?'ok':'ko'}"><div class="hd2">${ok?'✅ Juste':'❌ Voici la correction'}</div><div class="exp">${st.e}</div>
+      ${st.svg?EQSVG:''}${st.doute?'<div class="doute">⚠️ À vérifier : énoncé incomplet</div>':''}
+      <div class="rep">✍️ <b>À écrire sur ta copie :</b> ${st.rep}</div></div>`;
+    const row=c.querySelector('.btnrow'); row.innerHTML='';
+    const nx=el('button','btn full', EX.i+1<x.steps.length? 'Étape suivante →' : 'Voir mon résultat →');
+    nx.onclick=()=>{ sndClick(); EX.i++; if(EX.i<x.steps.length){ renderExStep(); setTimeout(()=>$$('#exSteps .exstep').pop().scrollIntoView({behavior:'smooth',block:'start'}),50); } else finishExo(); };
+    row.appendChild(nx); nx.focus();
+  };
+  if(st.t==='num'){
+    const inp=c.querySelector('.numin');
+    const check=()=>{ const v=parseFloat(inp.value.replace(',','.').replace(/[^0-9.\-]/g,'')); if(isNaN(v)){ toast('Écris un nombre 🙂'); return; }
+      done(Math.abs(v-st.v)<=st.tol); };
+    c.querySelector('.exok').onclick=check;
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); check(); } });
+    setTimeout(()=>inp.focus(),50);
+  } else c.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{ if(c.dataset.done) return; const ok=+b.dataset.k===st.a; if(!ok) b.classList.add('wrong','shake'); done(ok); });
+}
+function finishExo(){
+  const x=EX.x, n=x.steps.length, r=S.exo[x.id]||{best:-1};
+  r.best=Math.max(r.best,EX.first); S.exo[x.id]=r; save();
+  if(EX.step){ S.plan[EX.step]=true; save(); }
+  $('#exFill').style.width='100%';
+  const c=el('div','card score');
+  c.innerHTML=`<div class="note">${EX.first===n?'🏆':'📈'} ${EX.first} / ${n} étapes justes du premier coup</div>
+    <div class="verdict">${EX.first===n?'Parfait. Refais-le dans 2 jours pour que ça tienne.':'Refais-le demain : le but est de tout trouver sans indice.'}</div>
+    <div class="exsum"><b>Ce que tu écris sur ta copie :</b><ol>${x.steps.map(s=>'<li>'+s.rep+'</li>').join('')}</ol></div>
+    <div class="btnrow"><button class="btn ghost" id="exAgain">🔁 Refaire</button><button class="btn" id="exHome">🏠 Accueil</button></div>`;
+  $('#exSteps').appendChild(c); c.scrollIntoView({behavior:'smooth',block:'start'});
+  if(EX.first===n) confetti(120);
+  c.querySelector('#exAgain').onclick=()=>startExo(x.id);
+  c.querySelector('#exHome').onclick=()=>{ show('home'); renderHome(); };
+  renderHome();
 }
 
-/* ── Plan de révision 3 jours ──────────────────────────── */
+/* ── Le vrai contrôle : 40 questions dans l’ordre, 30 min, +1/0 ── */
+function startControle(step, random){
+  startSession('exam', CHAPTERS.map(c=>c.id), QUESTIONS.length,
+    {pool: random? shuffle(QUESTIONS) : QUESTIONS.slice(), fixed:!random, ctrl:true, timer:true, limit:30*60, malus:0, step});
+}
+function startBonusExam(){
+  startSession('exam', CHAPTERS.map(c=>c.id), 20, {pool:shuffle(BONUS).slice(0,20), timer:true, limit:15*60, malus:0});
+}
+
+/* ── Planning daté jusqu'au contrôle (vendredi 16 octobre) ──
+   Progressif en semaine, à fond le week-end, consolidation ensuite. */
+const EXAM_DATE='2026-10-16';
+const B=k=>BLOCS[k];
 const PLAN = [
- {t:"Appareillage et protection (Q1 à Q19)", ic:'🔌', steps:[
-   {id:'d1a', m:8,  l:"Lire les fiches des parties 1 et 2",              act:{k:'course', c:['c1','c2']}},
-   {id:'d1b', m:8,  l:"Par cœur : cartes Q1 à Q19",                       act:{k:'flash', c:['c1','c2']}},
-   {id:'d1c', m:7,  l:"Apprentissage — partie 1 (9 questions)",          act:{k:'learn', c:['c1'], n:9}},
-   {id:'d1d', m:8,  l:"Apprentissage — partie 2 (10 questions)",         act:{k:'learn', c:['c2'], n:10}} ]},
- {t:"Habilitations et consignation (Q20 à Q40)", ic:'🪪', steps:[
-   {id:'d2a', m:6,  l:"Répétition espacée — ce qui est dû",           act:{k:'review', n:15}},
-   {id:'d2b', m:8,  l:"Lire les fiches des parties 3 et 4",              act:{k:'course', c:['c3','c4']}},
-   {id:'d2c', m:9,  l:"Par cœur : cartes Q20 à Q40",                      act:{k:'flash', c:['c3','c4']}},
-   {id:'d2d', m:10, l:"Apprentissage — partie 3 (13 questions)",         act:{k:'learn', c:['c3'], n:13}},
-   {id:'d2e', m:7,  l:"Apprentissage — partie 4 (8 questions)",          act:{k:'learn', c:['c4'], n:8}} ]},
- {t:"Le contrôle de l’an dernier", ic:'📝', steps:[
-   {id:'d3a', m:6,  l:"Répétition espacée — ce qui est dû",           act:{k:'review', n:20}},
-   {id:'d3b', m:30, l:"🎯 Révision ciblée en conditions réelles : 40 questions, 30 min",      act:{k:'ctrl'}},
-   {id:'d3c', m:8,  l:"Refaire mes erreurs",                             act:{k:'err'}},
-   {id:'d3d', m:15, l:"Révision ciblée, 2e passage : viser 40/40",         act:{k:'ctrl'}} ]}
+ {d:'2026-10-07', t:"On démarre : bloc 1", ic:'🌱', steps:[
+   {id:'p07a', m:12, l:"📖 Apprendre le bloc 1 (Q1 à Q10) avec les astuces", act:{k:'bloc', b:0}},
+   {id:'p07b', m:8,  l:"🃏 Cartes du bloc 1",                               act:{k:'flashb', b:[0]}} ]},
+ {d:'2026-10-08', t:"Bloc 2", ic:'🛡️', steps:[
+   {id:'p08a', m:5,  l:"🃏 Cartes du bloc 1 (rappel rapide)",               act:{k:'flashb', b:[0]}},
+   {id:'p08b', m:12, l:"📖 Apprendre le bloc 2 (Q11 à Q19)",                act:{k:'bloc', b:1}},
+   {id:'p08c', m:8,  l:"🃏 Cartes du bloc 2",                               act:{k:'flashb', b:[1]}} ]},
+ {d:'2026-10-09', t:"Bloc 3 : les habilitations", ic:'🪪', steps:[
+   {id:'p09a', m:6,  l:"🔁 Répétition espacée (ce qui commence à s’oublier)", act:{k:'review', n:15}},
+   {id:'p09b', m:5,  l:"📘 Lire la fiche « Habilitations » (B0, BS, BR, BC…)", act:{k:'course', c:['c3']}},
+   {id:'p09c', m:14, l:"📖 Apprendre le bloc 3 (Q20 à Q32)",                act:{k:'bloc', b:2}} ]},
+ {d:'2026-10-10', t:"WEEK-END À FOND (1) : tout le QCM + l’exercice", ic:'🔥', steps:[
+   {id:'p10a', m:10, l:"🃏 Cartes des blocs 1 et 2",                        act:{k:'flashb', b:[0,1]}},
+   {id:'p10b', m:10, l:"🃏 Cartes du bloc 3",                               act:{k:'flashb', b:[2]}},
+   {id:'p10c', m:12, l:"📖 Apprendre le bloc 4 (Q33 à Q40)",                act:{k:'bloc', b:3}},
+   {id:'p10d', m:8,  l:"🃏 Cartes du bloc 4",                               act:{k:'flashb', b:[3]}},
+   {id:'p10e', m:20, l:"🧮 Exercice 2 (défaut d’isolement TT), avec les indices", act:{k:'exo', e:'e2'}},
+   {id:'p10f', m:15, l:"🔀 Les 40 en aléatoire (avec correction)",           act:{k:'random'}},
+   {id:'p10g', m:30, l:"📝 1<sup>er</sup> contrôle blanc, dans l’ordre (30 min)", act:{k:'ctrl'}},
+   {id:'p10h', m:8,  l:"❌ Refaire mes erreurs",                            act:{k:'err'}} ]},
+ {d:'2026-10-11', t:"WEEK-END À FOND (2) : viser l’objectif", ic:'🔥', steps:[
+   {id:'p11a', m:10, l:"🔁 Répétition espacée",                             act:{k:'review', n:25}},
+   {id:'p11b', m:15, l:"🧮 Exercice 2 : le refaire en utilisant le moins d’indices possible", act:{k:'exo', e:'e2'}},
+   {id:'p11c', m:30, l:"🎲 Contrôle blanc en aléatoire (30 min)",           act:{k:'ctrlR'}},
+   {id:'p11d', m:10, l:"❌ Refaire mes erreurs du contrôle",                act:{k:'err'}},
+   {id:'p11e', m:15, l:"🚀 Bonus : habilitations et consignation (même style)", act:{k:'bonus', c:['c3','c4']}},
+   {id:'p11f', m:5,  l:"🧩 Exercice 1 (double défaut, énoncé incomplet)",    act:{k:'exo', e:'e1'}} ]},
+ {d:'2026-10-12', t:"Entretien", ic:'🔧', steps:[
+   {id:'p12a', m:10, l:"🔁 Répétition espacée",                             act:{k:'review', n:20}},
+   {id:'p12b', m:5,  l:"⚡ Défi 5 minutes",                                  act:{k:'rush'}},
+   {id:'p12c', m:5,  l:"❌ Refaire mes erreurs",                            act:{k:'err'}} ]},
+ {d:'2026-10-13', t:"Contrôle blanc + exercice", ic:'📝', steps:[
+   {id:'p13a', m:30, l:"🎲 Contrôle blanc en aléatoire (30 min)",           act:{k:'ctrlR'}},
+   {id:'p13b', m:10, l:"🧮 Exercice 2 sans indice, comme le jour J",        act:{k:'exo', e:'e2'}},
+   {id:'p13c', m:8,  l:"❌ Refaire mes erreurs",                            act:{k:'err'}} ]},
+ {d:'2026-10-14', t:"Dernier gros entraînement", ic:'🎯', steps:[
+   {id:'p14a', m:30, l:"📝 Dernier contrôle blanc dans l’ordre : vise ton objectif", act:{k:'ctrl'}},
+   {id:'p14b', m:8,  l:"❌ Refaire mes erreurs",                            act:{k:'err'}},
+   {id:'p14c', m:15, l:"🚀 Contrôle inédit (20 questions nouvelles)",        act:{k:'bonusExam'}} ]},
+ {d:'2026-10-15', t:"La veille : léger, tout est déjà fait 😌", ic:'🌙', steps:[
+   {id:'p15a', m:10, l:"🔁 Répétition espacée, rien de nouveau",            act:{k:'review', n:15}},
+   {id:'p15b', m:5,  l:"📘 Relire l’antisèche avec les astuces",            act:{k:'course', c:['c1','c2','c3','c4']}},
+   {id:'p15c', m:1,  l:"Et c’est tout : soirée tranquille, dodo tôt 😴",   act:{k:'none'}} ]},
+ {d:'2026-10-16', t:"JOUR J 💪", ic:'🏁', steps:[
+   {id:'p16a', m:5,  l:"(Facultatif) 5 min sur l’antisèche le matin, pas plus", act:{k:'course', c:['c1','c2','c3','c4']}},
+   {id:'p16b', m:1,  l:"Au QCM : réponds à TOUT, aucune case vide (pas de points négatifs)", act:{k:'none'}},
+   {id:'p16c', m:1,  l:"À l’exercice : écris les formules avant les calculs, avec les unités", act:{k:'none'}} ]}
 ];
 function planSteps(){ return PLAN.flatMap(d=>d.steps); }
 function planDone(id){ return !!S.plan[id]; }
+function dayLabel(d){ return new Date(d+'T12:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}); }
+function planToday(){ const t=today(); return PLAN.find(d=>d.d===t) || null; }
+function planCurrent(){ // jour du planning à travailler : aujourd'hui, ou le 1er jour passé pas fini
+  const t=today(); const late=PLAN.find(d=>d.d<t && d.steps.some(s=>!planDone(s.id) && s.act.k!=='none'));
+  return late || planToday();
+}
 function runStep(st){
   sndClick();
-  const a=st.act;
+  const a=st.act, mark=()=>{ S.plan[st.id]=true; save(); renderPlan(); };
+  if(a.k==='none'){ mark(); toast('💪 Bonne chance !'); return; }
+  if(a.k==='exo'){ startExo(a.e); EX.step=st.id; return; }
   if(a.k==='course'){
-    S.plan[st.id]=true; save(); renderPlan();
-    show('course');
-    $$('#courseList .acc').forEach((el2,i)=>el2.classList.toggle('open', a.c.includes(CHAPTERS[i].id)));
+    mark(); show('course');
+    $$('#courseList .acc').forEach((el2,i)=>el2.classList.toggle('open', i<CHAPTERS.length && a.c.includes(CHAPTERS[i].id)));
     const first=$$('#courseList .acc')[CHAPTERS.findIndex(c=>c.id===a.c[0])];
     if(first) setTimeout(()=>first.scrollIntoView({behavior:'smooth',block:'start'}),60);
     return;
   }
-  if(a.k==='flash'){ S.plan[st.id]=true; save(); renderPlan(); startFlash(a.c); return; }
+  if(a.k==='flashb'){ mark(); startFlash(null, !!a.ordered, a.b.flatMap(k=>blocQs(B(k)))); return; }
+  if(a.k==='bloc'){ const l=blocQs(B(a.b)), fresh=l.every(q=>lvl(q)<0);
+    startSession('learn', CHAPTERS.map(c=>c.id), l.length, {pool: fresh? l : shuffle(l), fixed:fresh, step:st.id}); return; }
+  if(a.k==='random'){ startSession('learn', CHAPTERS.map(c=>c.id), QUESTIONS.length, {pool:shuffle(QUESTIONS), step:st.id}); return; }
   if(a.k==='ctrl'){ startControle(st.id); return; }
+  if(a.k==='ctrlR'){ startControle(st.id, true); return; }
+  if(a.k==='rush'){ startSession('exam', CHAPTERS.map(c=>c.id), QUESTIONS.length, {pool:shuffle(QUESTIONS), timer:true, limit:300, malus:0, rush:true, step:st.id}); return; }
+  if(a.k==='bonus'){ const pool=BONUS.filter(q=>a.c.includes(q.c)); startSession('learn', a.c, pool.length, {pool:shuffle(pool), step:st.id}); return; }
+  if(a.k==='bonusExam'){ startSession('exam', CHAPTERS.map(c=>c.id), 20, {pool:shuffle(BONUS).slice(0,20), timer:true, limit:15*60, malus:0, step:st.id}); return; }
   if(a.k==='err'){
     const pool=QUESTIONS.filter(q=>{const r=S.q[q.id];return r&&r.lastKo;});
-    if(!pool.length){ toast('Aucune erreur en attente 🎉'); S.plan[st.id]=true; save(); renderPlan(); return; }
-    startSession('learn', CHAPTERS.map(c=>c.id), pool.length, {pool, step:st.id}); return;
+    if(!pool.length){ toast('Aucune erreur en attente 🎉'); mark(); return; }
+    startSession('learn', CHAPTERS.map(c=>c.id), pool.length, {pool:shuffle(pool), step:st.id}); return;
   }
   if(a.k==='review'){
     const pool=poolReview();
-    if(!pool.length){ toast('Rien à réviser pour l\u2019instant — enchaîne sur l\u2019étape suivante 🙂');
-      S.plan[st.id]=true; save(); renderPlan(); return; }
+    if(!pool.length){ toast('Rien à réviser pour l’instant — étape suivante 🙂'); mark(); return; }
     startSession('review', CHAPTERS.map(c=>c.id), Math.min(a.n,pool.length), {pool, step:st.id});
     return;
   }
-  startSession(a.k, a.c, a.n, {timer:a.k==='exam', malus:0, step:st.id});
 }
 function renderPlan(){
   const box=$('#planList'); if(!box) return;
-  const all=planSteps(), done=all.filter(s=>planDone(s.id)).length;
+  const all=planSteps().filter(s=>s.act.k!=='none'), done=all.filter(s=>planDone(s.id)).length;
   $('#planPct').textContent=pct(done,all.length)+' %';
-  const cur=PLAN.findIndex(d=>d.steps.some(s=>!planDone(s.id)));
-  $('#planDay').textContent = cur<0? 'Terminé 🎉' : 'Jour '+(cur+1);
+  const t=today(), dl=Math.ceil((new Date(EXAM_DATE+'T12:00')-new Date(t+'T12:00'))/864e5);
+  $('#planDay').textContent = dl>1? 'J-'+dl : dl===1? 'Demain !' : dl===0? 'Jour J' : 'Terminé';
   box.innerHTML='';
-  PLAN.forEach((d,i)=>{
-    const nd=d.steps.filter(s=>planDone(s.id)).length, p=pct(nd,d.steps.length);
+  const cur=planCurrent();
+  PLAN.forEach(d=>{
+    const st2=d.steps.filter(s=>s.act.k!=='none');
+    const nd=st2.filter(s=>planDone(s.id)).length, p=pct(nd,st2.length||1);
     const mins=d.steps.reduce((s,x)=>s+x.m,0);
-    const acc=el('div','acc'+(i===cur?' open':''));
-    acc.innerHTML=`<button class="ah"><span class="em">${d.ic}</span>
-      <span><span style="display:block">Jour ${i+1} — ${esc(d.t)}</span>
-      <small style="font-weight:400;color:var(--txt3);font-size:.74rem">${mins} min · ${nd}/${d.steps.length} fait${nd>1?'s':''}</small></span>
+    const isT=d.d===t, past=d.d<t, wk=/WEEK-END/.test(d.t);
+    const acc=el('div','acc pday'+(cur===d?' open':'')+(isT?' today':'')+(wk?' wk':'')+(past&&p===100?' ok':''));
+    acc.innerHTML=`<button class="ah"><span class="em">${p===100&&st2.length?'✅':d.ic}</span>
+      <span><span style="display:block">${dayLabel(d.d)}${isT?' <span class="tday">aujourd’hui</span>':''}${past&&p<100?' <span class="late">en retard</span>':''}</span>
+      <small style="font-weight:400;color:var(--txt3);font-size:.74rem">${esc(d.t)} · ${mins} min · ${nd}/${st2.length}</small></span>
       <span style="margin-left:auto;display:flex;align-items:center;gap:9px">
         <span style="font-family:var(--fm);font-size:.8rem;font-weight:800;color:${p===100?'var(--ok)':'var(--txt3)'}">${p}%</span>
         <span class="ar">›</span></span></button><div class="ab"></div>`;
     const body=acc.querySelector('.ab');
-    const tr=el('div','tr2','');
-    tr.style.cssText='height:6px;border-radius:999px;background:var(--surf2);border:1px solid var(--line);overflow:hidden;margin:12px 0 4px';
-    tr.innerHTML=`<i style="display:block;height:100%;width:${p}%;background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .6s"></i>`;
-    body.appendChild(tr);
     d.steps.forEach(st=>{
       const ok=planDone(st.id);
       const row=el('div','pstep');
       row.innerHTML=`<button class="pchk${ok?' on':''}" title="Marquer fait">${ok?'✓':''}</button>
-        <span class="ptxt"><b>${esc(st.l)}</b><small>${st.m} min</small></span>
-        <button class="pgo">${ok?'Refaire':'Commencer'} →</button>`;
-      row.querySelector('.pchk').onclick=()=>{ S.plan[st.id]=!ok; save(); renderPlan(); sndClick(); };
-      row.querySelector('.pgo').onclick=()=>runStep(st);
+        <span class="ptxt"><b>${st.l}</b><small>${st.m} min</small></span>
+        ${st.act.k==='none'?'':`<button class="pgo">${ok?'Refaire':'Go'} →</button>`}`;
+      row.querySelector('.pchk').onclick=()=>{ S.plan[st.id]=!ok; save(); renderPlan(); renderHome(); sndClick(); };
+      if(row.querySelector('.pgo')) row.querySelector('.pgo').onclick=()=>runStep(st);
       body.appendChild(row);
     });
     acc.querySelector('.ah').onclick=()=>{ acc.classList.toggle('open'); sndClick(); };
     box.appendChild(acc);
   });
   const note=el('div','tip');
-  note.innerHTML='<b>La veille au soir, 10 min :</b> 🃏 <b>Par cœur</b> sur les 40 cartes, puis <b>❌ Refaire mes erreurs</b>. Le jour J, il n\u2019y a pas de points négatifs : <b>ne laisse aucune case vide</b>.';
+  note.innerHTML='<b>En retard d’un jour ?</b> Pas grave : fais les étapes en retard d’abord, le bouton ▶ Continuer de l’accueil te les propose dans l’ordre. Le gros du travail se fait le week-end 🔥, la veille on ne fait presque rien.';
   note.style.marginTop='14px';
   box.appendChild(note);
 }
@@ -952,7 +1204,13 @@ function poolReview(){
 }
 $('#btnAll').onclick=()=>{ sndClick(); startSession('learn', CHAPTERS.map(c=>c.id), QUESTIONS.length); };
 $('#btnOrder').onclick=()=>{ sndClick(); startSession('learn', CHAPTERS.map(c=>c.id), QUESTIONS.length, {pool:QUESTIONS.slice(), fixed:true}); };
+$('#btnRandom').onclick=()=>{ sndClick(); startSession('learn', CHAPTERS.map(c=>c.id), QUESTIONS.length, {pool:shuffle(QUESTIONS)}); };
+$('#btnCtrlRandom').onclick=()=>{ sndClick(); startControle(null,true); };
+$('#btnRush').onclick=()=>{ sndClick(); startSession('exam', CHAPTERS.map(c=>c.id), QUESTIONS.length, {pool:shuffle(QUESTIONS), timer:true, limit:300, malus:0, rush:true}); };
+$('#btnBonusAll').onclick=()=>{ sndClick(); startSession('learn', CHAPTERS.map(c=>c.id), BONUS.length, {pool:shuffle(BONUS)}); };
+$('#btnBonusExam').onclick=()=>{ sndClick(); startBonusExam(); };
 $('#btnFlashOrder').onclick=()=>{ sndClick(); startFlash(null,true); };
+$('#exQuit').onclick=()=>{ sndClick(); show('home'); renderHome(); };
 $('#flQuit').onclick=()=>{ sndClick(); show('home'); renderHome(); renderStats(); };
 $('#btnErr').onclick=()=>{ sndClick();
   const pool=QUESTIONS.filter(q=>{const r=S.q[q.id];return r&&r.lastKo;});
@@ -995,10 +1253,12 @@ document.addEventListener('keydown', e=>{
 document.documentElement.dataset.theme = S.theme;
 if(typeof OWNER==='string' && OWNER){
   const g=$('#greet'); if(g) g.innerHTML='👋 Salut '+esc(OWNER)+' — ta révision SECU3';
+  if(typeof ACCENT==='object'){ const r=document.documentElement.style; r.setProperty('--acc',ACCENT[0]); r.setProperty('--acc2',ACCENT[1]); }
   document.title='Quiz SECU3 — '+OWNER;
 }
 // remise à zéro de la série quotidienne si un jour a été sauté
 (function(){ if(S.day.last){ const y=new Date(Date.now()-864e5).toISOString().slice(0,10);
   if(S.day.last!==today() && S.day.last!==y) S.day.streak=0; } })();
 renderHeader(); renderHome(); renderCourse(); renderStats(); renderPlan();
+if(!S.goal.set) setTimeout(openGoal,400);
 console.log('SECU3 Quiz — '+QUESTIONS.length+' questions chargées.');

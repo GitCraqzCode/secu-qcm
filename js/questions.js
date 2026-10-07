@@ -182,7 +182,7 @@ const QUESTIONS = [
 
 {n:36,p:4,c:'c4',t:'qcm',d:3,doute:true,q:"Pour une canalisation aérienne à conducteurs nus, la DLI (Distance Limite d’Investigation) est de :",
  o:["3 m","5 m","50 m"], a:2,
- e:"La DLI est la distance jusqu’à laquelle il faut <b>rechercher</b> les ouvrages électriques avant une opération. Pour une ligne aérienne nue, elle vaut <b>50 m</b>. Ne pas confondre avec la DLVS (3 m en BT, 5 m en HT), qui délimite la zone de voisinage. Énoncé lu par transparence : à vérifier."},
+ e:"La DLI est la distance jusqu’à laquelle il faut <b>rechercher</b> les ouvrages électriques avant une opération. Pour une ligne aérienne nue, elle vaut <b>50 m</b>. Ne pas confondre avec la DLVS (3 m jusqu’à 50 kV, 5 m au-delà), qui délimite la zone de voisinage. Énoncé lu par transparence : à vérifier."},
 
 /* ══════════ PAGE 5 ══════════ */
 

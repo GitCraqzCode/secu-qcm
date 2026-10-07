@@ -33,68 +33,110 @@
 
 <!-- ══════════ ACCUEIL ══════════ -->
 <section class="view on" id="v-home">
-  <div class="hero">
+  <div class="hero hero2">
     <div class="greet" id="greet"></div>
     <h1>Contrôle SECU3 — Sécurité électrique</h1>
-    <p>IUT de Blagnac — GIM S3. Le contrôle de l’an dernier (2025-2026) : ses <b id="totQ">40</b> questions, mot pour mot, rien d’autre.</p>
-    <div class="kpis">
-      <div class="kpi"><b id="kSeen">0</b><small>vues</small></div>
-      <div class="kpi"><b id="kAcc">—</b><small>réussite</small></div>
-      <div class="kpi"><b id="kXp">0</b><small>XP</small></div>
-      <div class="kpi"><b id="kBadge">0/17</b><small>badges</small></div>
+    <div class="goalrow">
+      <div class="mring" id="mRing"></div>
+      <div class="goalinfo">
+        <div class="cd" id="countdown">Date du contrôle ?</div>
+        <div class="gtxt" id="goalTxt"></div>
+        <div class="today"><div class="tlab"><span>Aujourd’hui</span><b id="todayTxt">0 / 0</b></div><div class="tbar"><i id="todayFill"></i></div></div>
+        <button class="linkbtn" id="goalEdit">✏️ Modifier mon objectif</button>
+      </div>
     </div>
+    <button class="btn big full" id="btnNext">▶ Continuer</button>
+    <div class="nextwhy" id="nextWhy"></div>
   </div>
 
-  <h2 class="sect">🎯 Révision ciblée</h2>
+  <h2 class="sect">Tes 40 questions <small class="sectsub">touche une case pour la travailler</small></h2>
+  <div class="card"><div class="qmap" id="qmap"></div>
+    <div class="qleg"><span><i class="l-1"></i>pas vue</span><span><i class="l0"></i>ratée</span><span><i class="l1"></i>1 fois juste</span><span><i class="l2"></i>maîtrisée</span><span><i class="l3"></i>béton</span></div></div>
+
+  <h2 class="sect">🎯 Révision ciblée <small class="sectsub">exactement le contrôle de l’an dernier</small></h2>
   <div class="cible">
-    <p><b>Exactement le contrôle de l’an dernier</b> : les 40 questions dans l’ordre de la feuille, avec les mêmes réponses proposées dans le même ordre. 30 min, +1 juste / 0 faux ou vide.</p>
+    <p>Les <b>40 questions mot pour mot</b>, avec les mêmes réponses proposées. Le jour J : 30 min, +1 si c’est juste, 0 si c’est faux ou vide.</p>
     <div class="cbtns">
-      <button class="cbtn" id="btnOrder"><span class="em">📖</span><b>Apprendre dans l’ordre</b><small>Q1 → Q40, correction après chaque question</small></button>
-      <button class="cbtn" id="btnFlashOrder"><span class="em">🃏</span><b>Par cœur dans l’ordre</b><small>Cartes Q1 → Q40, retourne et dis si tu savais</small></button>
-      <button class="cbtn hot" data-mode="ctrl"><span class="em">📝</span><b>En conditions réelles</b><small id="ctrlTag">Jamais fait → vise 40/40</small></button>
+      <button class="cbtn" id="btnOrder"><span class="em">📖</span><b>Apprendre dans l’ordre</b><small>Q1 → Q40, correction et astuce à chaque question</small></button>
+      <button class="cbtn" id="btnRandom"><span class="em">🔀</span><b>Apprendre en aléatoire</b><small>Questions et réponses mélangées : vérifie que tu as compris, pas juste retenu la place de la réponse</small></button>
+      <button class="cbtn" id="btnFlashOrder"><span class="em">🃏</span><b>Par cœur (cartes)</b><small>Tu lis, tu réponds dans ta tête, tu retournes la carte</small></button>
+      <button class="cbtn hot" data-mode="ctrl"><span class="em">📝</span><b>Contrôle blanc, dans l’ordre</b><small id="ctrlTag">30 min comme le jour J</small></button>
+      <button class="cbtn hot" id="btnCtrlRandom"><span class="em">🎲</span><b>Contrôle blanc, en aléatoire</b><small>Les 40 mélangées, 30 min</small></button>
+      <button class="cbtn" id="btnRush"><span class="em">⚡</span><b>Défi 5 minutes</b><small>Le plus de bonnes réponses possible en 5 min</small></button>
     </div>
   </div>
 
-  <h2 class="sect">Autres modes</h2>
-  <div class="modes">
-    <button class="mode" data-mode="learn">
-      <span class="em">🎓</span><h3>Apprentissage</h3>
-      <p>Correction et explication détaillée après chaque question. Aucune pression, aucun chrono.</p>
-      <div class="tagline">Commence ici →</div>
-    </button>
-    <button class="mode" data-mode="exam">
-      <span class="em">⏱️</span><h3>Examen blanc</h3>
-      <p>Questions mélangées, chrono, note sur 20, correction à la fin.</p>
-      <div class="tagline">Teste-toi →</div>
-    </button>
-    <button class="mode" data-mode="flash">
-      <span class="em">🃏</span><h3>Par cœur</h3>
-      <p>Les 40 en cartes mélangées : tu lis, tu réponds dans ta tête, tu retournes.</p>
-      <div class="tagline">Mémorise →</div>
-    </button>
-    <button class="mode" data-mode="review">
-      <span class="em">🔁</span><h3>Répétition espacée</h3>
-      <p>Répétition espacée : les questions ratées reviennent, les acquises s'espacent.</p>
-      <div class="tagline" id="dueTag">Rien à réviser</div>
-    </button>
+  <h2 class="sect">🧮 L’exercice <small class="sectsub">2<sup>e</sup> partie du contrôle (SECU3a)</small></h2>
+  <p class="howto">En plus du QCM, le contrôle avait des <b>exercices de calcul</b> sur les défauts d’isolement. Fais-les étape par étape : un indice si tu bloques, la correction après chaque étape.</p>
+  <div class="blocs" id="exoList"></div>
+
+  <h2 class="sect">🧠 Apprendre pas à pas <small class="sectsub">la méthode des 4 blocs</small></h2>
+  <p class="howto">Apprends un bloc avec les astuces, puis repasse-le en cartes. Il est validé quand <b>8 questions sur 10</b> sont maîtrisées (justes 2 fois de suite).</p>
+  <div class="blocs" id="blocList"></div>
+
+  <h2 class="sect">🚀 Aller plus loin <small class="sectsub">nouvelles questions, même style</small></h2>
+  <div class="card plus">
+    <p><b id="bonusN">0</b> questions <b>nouvelles</b> sur les mêmes notions (tensions, symboles, habilitations, consignation…). <b>Elles ne sont pas dans le contrôle de l’an dernier</b> : fais-les une fois que tu connais les 40, pour savoir répondre même si le prof change ses questions.</p>
+    <div class="chips" id="bonusChaps"></div>
+    <div class="btnrow">
+      <button class="btn ghost" id="btnBonusAll">🔀 Toutes, mélangées</button>
+      <button class="btn" id="btnBonusExam">📝 Contrôle inédit (20 questions, chrono)</button>
+    </div>
   </div>
 
-  <h2 class="sect">Les 4 parties du contrôle</h2>
-  <div class="chaps" id="chapList"></div>
-  <div class="btnrow">
-    <button class="btn ghost" id="btnAll">🔀 Les 40 mélangées</button>
-    <button class="btn ghost" id="btnErr">❌ Refaire mes erreurs</button>
-  </div>
+  <details class="more">
+    <summary>⚙️ Plus d’options : examen blanc à régler, répétition espacée, parties</summary>
+    <div class="modes" style="margin-top:12px">
+      <button class="mode" data-mode="learn">
+        <span class="em">🎓</span><h3>Apprentissage</h3>
+        <p>Tu choisis les parties et le nombre de questions. Correction après chaque question.</p>
+        <div class="tagline">Régler →</div>
+      </button>
+      <button class="mode" data-mode="exam">
+        <span class="em">⏱️</span><h3>Examen blanc</h3>
+        <p>Tu choisis les parties, le chrono et le barème. Note sur 20 à la fin.</p>
+        <div class="tagline">Régler →</div>
+      </button>
+      <button class="mode" data-mode="review">
+        <span class="em">🔁</span><h3>Répétition espacée</h3>
+        <p>Les questions ratées reviennent vite, celles que tu sais reviennent de plus en plus tard.</p>
+        <div class="tagline" id="dueTag">Rien à réviser</div>
+      </button>
+    </div>
+    <h2 class="sect">Les 4 parties du contrôle</h2>
+    <div class="chaps" id="chapList"></div>
+    <div class="btnrow">
+      <button class="btn ghost" id="btnAll">🔀 Les 40 mélangées</button>
+      <button class="btn ghost" id="btnErr">❌ Refaire mes erreurs</button>
+    </div>
+  </details>
 
-  <h2 class="sect">Badges</h2>
+  <h2 class="sect">Badges <small class="sectsub" id="kBadge"></small></h2>
   <div class="badges" id="badgeList"></div>
 
   <footer>
-    Source : CONTRÔLE SECU3, IUT de Blagnac, GIM S3, 2025-2026 (photos du sujet). Réponses proposées, sans corrigé officiel : ⚠️ = à vérifier.<br>
-    Application de révision · progression enregistrée dans ce navigateur.
+    Source : CONTRÔLE SECU3, IUT de Blagnac, GIM S3, 2025-2026 (photos du sujet). Pas de corrigé officiel : les réponses marquées ⚠️ sont à vérifier.<br>
+    Ta progression est enregistrée dans ce navigateur, sur cet appareil (téléphone et PC ne se partagent pas la progression).
     <br><button class="btn ghost" id="btnReset" style="margin-top:12px;font-size:.78rem;padding:8px 14px">Réinitialiser ma progression</button>
   </footer>
 </section>
+
+<!-- ══════════ OBJECTIF ══════════ -->
+<div class="onb" id="onb">
+  <div class="onbcard">
+    <div class="onbem">🎯</div>
+    <h2 id="onbHi">Salut !</h2>
+    <p>On se fixe un objectif. L’appli te dira chaque jour quoi faire pour y arriver.</p>
+    <span class="lbl">Ton contrôle est quand ?</span>
+    <input type="date" id="onbDate">
+    <span class="lbl">Ton objectif</span>
+    <div class="chips" id="onbTarget"></div>
+    <div class="btnrow">
+      <button class="btn ghost" id="onbLater">Plus tard</button>
+      <button class="btn" id="onbGo">C’est parti →</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══════════ CONFIGURATION ══════════ -->
 <section class="view" id="v-setup">
@@ -134,7 +176,18 @@
     <div class="timer" id="qTimer" style="display:none">00:00</div>
   </div>
   <div class="card" id="qCard"></div>
-  <div class="hint">Raccourcis : <span class="kbd">1</span>–<span class="kbd">9</span> pour répondre · <span class="kbd">Entrée</span> pour valider / continuer</div>
+  <div class="hint">Sur PC : <span class="kbd">1</span>–<span class="kbd">9</span> pour répondre · <span class="kbd">Entrée</span> pour valider / continuer</div>
+</section>
+
+<!-- ══════════ EXERCICE ══════════ -->
+<section class="view" id="v-exo">
+  <div class="qtop">
+    <button class="iconbtn" id="exQuit" title="Quitter">✕</button>
+    <div class="prog"><i id="exFill" style="width:0%"></i></div>
+    <div class="cnt" id="exCount">1/9</div>
+  </div>
+  <div class="card" id="exHead"></div>
+  <div id="exSteps"></div>
 </section>
 
 <!-- ══════════ PAR CŒUR ══════════ -->
@@ -162,10 +215,10 @@
 <!-- ══════════ PLAN ══════════ -->
 <section class="view" id="v-plan">
   <div class="hero" style="padding:18px">
-    <h1 style="font-size:1.22rem">Plan de révision — 3 jours × 30-45 min</h1>
-    <p>Jour 1 : Q1 à Q19. Jour 2 : Q20 à Q40. Jour 3 : le vrai contrôle. Coche au fur et à mesure.</p>
+    <h1 style="font-size:1.22rem">Planning jusqu’au vendredi 16 octobre</h1>
+    <p>Doucement en semaine (20-25 min), <b>à fond le week-end</b>, on entretient lundi et mardi, dernier gros entraînement mercredi, et la veille c’est léger. Le bouton ▶ Continuer de l’accueil suit ce planning.</p>
     <div class="kpis"><div class="kpi"><b id="planPct">0 %</b><small>du plan fait</small></div>
-      <div class="kpi"><b id="planDay">Jour 1</b><small>à faire maintenant</small></div></div>
+      <div class="kpi"><b id="planDay">J-9</b><small>avant le contrôle</small></div></div>
   </div>
   <div id="planList" style="margin-top:16px"></div>
 </section>
@@ -209,6 +262,8 @@
 
 <script src="js/owner.js"></script>
 <script src="js/questions.js"></script>
+<script src="js/aides.js"></script>
+<script src="js/exo.js"></script>
 <script src="js/course.js"></script>
 <script src="js/app.js"></script>
 </body>

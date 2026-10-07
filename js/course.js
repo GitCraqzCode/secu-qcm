@@ -58,6 +58,14 @@ c2: [
   <tr><td>HTB</td><td>&gt; <b>50 kV</b></td><td>&gt; 75 kV</td></tr></table>
   <p class="tip">63 kV alternatif → <b>HTB</b>. 100 V <b>continu</b> → <b>TBT</b> (piège !).</p>`},
 
+ {t:"🧮 Méthode de l’exercice : défaut d’isolement en TT", h:`
+  <ol><li><b>Régime</b> : neutre à la terre (R<sub>B</sub>) + masses à la terre (R<sub>A</sub>) → <b>TT</b></li>
+  <li><b>Boucle de défaut</b> : V (230 V) → R<sub>d</sub> → R<sub>A</sub> → R<sub>B</sub>, en série<br><b>I<sub>d</sub> = V / (R<sub>d</sub> + R<sub>A</sub> + R<sub>B</sub>)</b></li>
+  <li><b>U<sub>c</sub> = R<sub>A</sub> × I<sub>d</sub></b> → dangereuse si U<sub>c</sub> &gt; U<sub>L</sub></li>
+  <li><b>I<sub>c</sub> = U<sub>c</sub> / R<sub>c</sub></b> → dangereux si &gt; 30 mA (contraction dès 10 mA)</li>
+  <li>Protection : <b>DDR</b>, réglage <b>I<sub>Δn</sub> ≤ U<sub>L</sub> / R<sub>A</sub></b> · temps : tableau 41A, ligne <b>TT</b>, colonne de U<sub>0</sub></li></ol>
+  <p class="tip">Avec les valeurs du contrôle : I<sub>d</sub> ≈ 4,18 A · U<sub>c</sub> ≈ 83,6 V · I<sub>c</sub> ≈ 41,8 mA · I<sub>Δn</sub> ≤ 1,25 A · 0,2 s.</p>`},
+
  {t:"Régimes de neutre et tension limite (Q17 à Q19)", h:`
   <table><tr><th>Régime</th><th>Masses</th><th>Protège les personnes</th></tr>
   <tr><td><b>TT</b></td><td>Obligatoirement à la <b>terre</b></td><td>Différentiel (DDR)</td></tr>
